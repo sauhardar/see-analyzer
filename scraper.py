@@ -1,10 +1,9 @@
-from re import I
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
-
+import timeit
 import pandas as pd
 from time import sleep
 
@@ -13,69 +12,91 @@ gpas = []
 remarks = []
 
 def init_scraper():
-  print("Initializing scraper...")
-  url = "https://www.see.gov.np/exam/results"
-  chrome_options = Options()
-  chrome_options.add_argument("--headless")
-  driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-  driver.get(url)
+    print("🕸\tInitializing scraper...")
+    url = "https://www.see.gov.np/exam/results"
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    driver = webdriver.Chrome(service=Service(
+        ChromeDriverManager().install()), options=chrome_options)
+    driver.get(url)
 
-  return driver
+    return driver
 
 def scrape_iframe(driver, symbol):
-  print("Scraping symbol: ", symbol)
-  
-  iframe = driver.find_elements(by=By.TAG_NAME, value='iframe')[0]
-  driver.switch_to.frame(iframe)
+    print("Scraping symbol: ", symbol)
 
-  font_tag = driver.find_element(by=By.TAG_NAME, value="font")
-  if font_tag.text.strip() == ":: Symbol Not Found !!!":
-    return
+    iframe = driver.find_elements(by=By.TAG_NAME, value='iframe')[0]
+    driver.switch_to.frame(iframe)
 
-  submission_input_elem = driver.find_element(by=By.NAME, value="symbol")
-  submission_input_elem.clear()
-  submission_input_elem.send_keys(symbol)
+    font_tag = driver.find_element(by=By.TAG_NAME, value="font")
+    if font_tag.text.strip() == ":: Symbol Not Found !!!":
+        print("❕️\tSymbol not found: ", symbol)
+        print("Skipping...\nn")
+        driver.switch_to.default_content()
+        return driver
 
-  submission_button_elem = driver.find_element(by=By.NAME, value="submit")
-  submission_button_elem.click()
+    submission_input_elem = driver.find_element(by=By.NAME, value="symbol")
+    submission_input_elem.clear()
+    submission_input_elem.send_keys(symbol)
 
-  table = driver.find_element(by=By.TAG_NAME, value="tbody")
-  data = table.find_elements(by=By.TAG_NAME, value="b")
-  
-  symbols.append(data[1].text)
-  gpas.append(data[2].text)
-  remarks.append(data[3].text)
-  
-  driver.switch_to.default_content()
-  return driver
+    submission_button_elem = driver.find_element(by=By.NAME, value="submit")
+    submission_button_elem.click()
+
+    table = driver.find_element(by=By.TAG_NAME, value="tbody")
+    data = table.find_elements(by=By.TAG_NAME, value="b")
+
+    symbols.append(data[1].text)
+    gpas.append(data[2].text)
+    remarks.append(data[3].text)
+
+    driver.switch_to.default_content()
+    return driver
 
 def create_df():
-  df = pd.DataFrame({"GPA": gpas, "Remarks": remarks}, index=symbols)
-  return df
+    df = pd.DataFrame({"symbol": symbols, "gpa": gpas, "remarks": remarks})
+    return df
 
 def padder(symbol):
-  as_str = str(symbol)
-  if len(as_str) < 8:
-    padded = (8 - len(as_str)) * "0" + as_str
-    return padded
-  else:
-    return as_str
+    as_str = str(symbol)
+    if len(as_str) < 8:
+        padded = (8 - len(as_str)) * "0" + as_str
+        return padded
+    else:
+        return as_str
 
 def main_scraper():
-  print("Running main scraper...")
-  driver = init_scraper()
-  symbol = 100001
+    print("🕷\tRunning main scraper...")
+    driver = init_scraper()
+    initial_symbol = 100_001
+    to_add = 0
+    symbol = initial_symbol
+    start = timeit.default_timer()
+    errors = 0
+    for _ in range(100_000):
+        try:
+            driver = scrape_iframe(driver, padder(symbol))
+            symbol = symbol + 1
+            if len(symbols) % 50 == 0:
+                print(f"🎉\t{len(symbols)} rows completed.")
+            
+            if len(symbols) % 10 == 0:
+                df = create_df()
+                df.to_csv(f"results/{len(symbols)}.csv", index=False)
+        except:
+            print("❌\tError occurred while scraping symbol: ", symbol)
+            print("😵‍💫\tRestarting driver...")
+            errors += 1
+            driver = init_scraper()
+            to_add = to_add + 100_000
+            symbol = initial_symbol + to_add
 
-  for i in range(1000):
-    print("Running with symbol: ", symbol)
-    driver = scrape_iframe(driver, padder(symbol))
-    symbol = symbol + 1
+    df = create_df()
+    df.to_csv('final_results.csv')
+    end = timeit.default_timer()
+    print(f"⏲\tTotal time taken: {end - start} seconds.")
+    print(f"💥\tTotal errors: {errors}.")
+    print(df)
 
-  df = create_df()
-  df.to_csv('results.csv')
-  print(df)
-
-  driver.close()
-
+    driver.close()
 
 main_scraper()
