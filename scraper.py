@@ -24,7 +24,7 @@ def init_scraper():
     return driver
 
 def scrape_iframe(driver, symbol):
-    print("🧹\tScraping symbol: ", symbol)
+    # print("🧹\tScraping symbol: ", symbol)
 
     iframe = driver.find_elements(by=By.TAG_NAME, value='iframe')[0]
     driver.switch_to.frame(iframe)
@@ -71,22 +71,22 @@ def main_scraper():
         os.makedirs("results")
 
     driver = init_scraper()
-    initial_symbol = 100_001
+    initial_symbol = 300_467
     to_add = 0
     symbol = initial_symbol
     start = timeit.default_timer()
     errors = 0
-    file_storage_increment = 10
-    for _ in range(100_000):
+    file_storage_increment = 500
+    for _ in range(2000):
         try:
             driver = scrape_iframe(driver, padder(symbol))
             symbol = symbol + 1
-            if len(symbols) % 50 == 0:
+            if len(symbols) % 100 == 0:
                 print(f"🎉\t{len(symbols)} rows completed.")
             
             if len(symbols) % file_storage_increment == 0:
                 df = create_df()
-                os.remove(f"results/first_{len(symbols) - file_storage_increment}.csv") if len(symbols) > file_storage_increment else None
+                # os.remove(f"results/first_{len(symbols) - file_storage_increment}.csv") if len(symbols) > file_storage_increment else None
                 df.to_csv(f"results/first_{len(symbols)}.csv", index=False)
         except Exception as e:
             print(e)
