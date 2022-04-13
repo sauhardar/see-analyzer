@@ -6,6 +6,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 import timeit
 import pandas as pd
 from time import sleep
+import os
 
 symbols = []
 gpas = []
@@ -23,7 +24,7 @@ def init_scraper():
     return driver
 
 def scrape_iframe(driver, symbol):
-    print("Scraping symbol: ", symbol)
+    print("🧹\tScraping symbol: ", symbol)
 
     iframe = driver.find_elements(by=By.TAG_NAME, value='iframe')[0]
     driver.switch_to.frame(iframe)
@@ -66,12 +67,16 @@ def padder(symbol):
 
 def main_scraper():
     print("🕷\tRunning main scraper...")
+    if not os.path.exists("results"):
+        os.makedirs("results")
+
     driver = init_scraper()
     initial_symbol = 100_001
     to_add = 0
     symbol = initial_symbol
     start = timeit.default_timer()
     errors = 0
+    file_storage_increment = 10
     for _ in range(100_000):
         try:
             driver = scrape_iframe(driver, padder(symbol))
@@ -79,10 +84,13 @@ def main_scraper():
             if len(symbols) % 50 == 0:
                 print(f"🎉\t{len(symbols)} rows completed.")
             
-            if len(symbols) % 10 == 0:
+            if len(symbols) % file_storage_increment == 0:
                 df = create_df()
-                df.to_csv(f"results/{len(symbols)}.csv", index=False)
-        except:
+                os.remove(f"results/first_{len(symbols) - file_storage_increment}.csv") if len(symbols) > file_storage_increment else None
+                df.to_csv(f"results/first_{len(symbols)}.csv", index=False)
+        except Exception as e:
+            print(e)
+
             print("❌\tError occurred while scraping symbol: ", symbol)
             print("😵‍💫\tRestarting driver...")
             errors += 1
@@ -91,7 +99,7 @@ def main_scraper():
             symbol = initial_symbol + to_add
 
     df = create_df()
-    df.to_csv('final_results.csv')
+    df.to_csv('results/final_results.csv')
     end = timeit.default_timer()
     print(f"⏲\tTotal time taken: {end - start} seconds.")
     print(f"💥\tTotal errors: {errors}.")
